@@ -419,6 +419,7 @@ footer{
     <button class="btn ghost small" onclick="exportData()">⬇️ Backup my data</button>
     <button class="btn ghost small" onclick="document.getElementById('importFile').click()">⬆️ Restore backup</button>
     <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+    <button class="btn danger small" onclick="confirmStartFresh()">🗑️ Start fresh</button>
   </div>
   <p class="copyright-note">&copy; 2026 Ocean. All rights reserved. Ocean's Dance Diary&trade;</p>
 </footer>
@@ -940,6 +941,17 @@ function importData(e){
   };
   reader.readAsText(file);
   e.target.value = '';
+}
+
+function confirmStartFresh(){
+  confirmAction('This will permanently erase every lesson, diary entry, and achievement on this device (and in the cloud). This cannot be undone. Are you sure?', ()=>{
+    events = [];
+    diary = [];
+    achievements = { medals:[], skills:[], performances:[] };
+    saveEvents(); saveDiary(); saveAchievements();
+    renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+    notify('All data has been erased. Starting fresh!');
+  });
 }
 
 /* ---------- utils ---------- */
