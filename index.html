@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Copyright (c) 2026 Ocean. All rights reserved. Ocean's Dance Diary(TM). -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -84,7 +85,7 @@ body{
   background:var(--bg);
   color:var(--ink);
   min-height:100vh;
-  padding-bottom:70px;
+  padding-bottom:92px;
 }
 button,input,select,textarea{font-family:inherit;color:inherit}
 h1,h2,h3{font-family:'Quicksand',sans-serif;font-weight:700;margin:0 0 8px}
@@ -239,8 +240,10 @@ main{max-width:960px;margin:0 auto;padding:16px}
 footer{
   position:fixed;bottom:0;left:0;right:0;
   background:var(--card-bg);border-top:2px solid var(--line);
-  display:flex;gap:8px;justify-content:center;padding:8px;z-index:15;
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;z-index:15;
 }
+.footer-buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.copyright-note{font-size:.7rem;color:var(--ink-soft);margin:0}
 
 .modal-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,.45);
@@ -260,7 +263,7 @@ footer{
 
 <header class="app-header">
   <div class="today-date" id="todayDate"></div>
-  <div class="app-title">🩰 Ocean's Dance Diary</div>
+  <div class="app-title">🩰 Ocean's Dance Diary&trade;</div>
 </header>
 
 <nav class="tabs">
@@ -397,9 +400,12 @@ footer{
 </main>
 
 <footer>
-  <button class="btn ghost small" onclick="exportData()">⬇️ Backup my data</button>
-  <button class="btn ghost small" onclick="document.getElementById('importFile').click()">⬆️ Restore backup</button>
-  <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+  <div class="footer-buttons">
+    <button class="btn ghost small" onclick="exportData()">⬇️ Backup my data</button>
+    <button class="btn ghost small" onclick="document.getElementById('importFile').click()">⬆️ Restore backup</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+  </div>
+  <p class="copyright-note">&copy; 2026 Ocean. All rights reserved. Ocean's Dance Diary&trade;</p>
 </footer>
 
 <div class="modal-overlay hidden" id="modalOverlay" onclick="if(event.target===this)closeModal()">
@@ -856,7 +862,13 @@ function importData(e){
 
 /* ---------- utils ---------- */
 function capitalizeSentences(str){
-  return str.replace(/(^\s*[a-z]|[.!?]\s+[a-z])/g, match => match.toUpperCase());
+  let result = str.trim();
+  if(!result) return result;
+  result = result.replace(/\s{2,}/g, ' ');
+  result = result.replace(/(^\s*[a-z]|[.!?]\s+[a-z])/g, match => match.toUpperCase());
+  result = result.replace(/\bi\b/g, 'I');
+  if(!/[.!?]$/.test(result)) result += '.';
+  return result;
 }
 function escapeHtml(str){
   const d = document.createElement('div');
