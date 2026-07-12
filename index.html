@@ -100,7 +100,7 @@ h1,h2,h3{font-family:'Quicksand',sans-serif;font-weight:700;margin:0 0 8px}
 .today-date{
   font-family:'Quicksand',sans-serif;
   font-weight:700;
-  font-size:clamp(1.3rem,4.5vw,2.1rem);
+  font-size:clamp(1.8rem,6.5vw,3rem);
   color:var(--ink);
   letter-spacing:.5px;
 }
@@ -187,6 +187,13 @@ main{max-width:960px;margin:0 auto;padding:16px}
 .affirmation{
   font-family:'Quicksand',sans-serif;font-weight:700;font-size:1.1rem;
   text-align:center;color:var(--purple);padding:6px 0 2px;
+}
+.greeting{
+  text-align:center;color:var(--ink-soft);font-size:.95rem;padding:2px 0 4px;
+}
+.backup-reminder{
+  background:var(--gold-light);border:2px solid var(--gold);border-radius:var(--radius);
+  padding:10px 14px;margin-bottom:16px;text-align:center;font-size:.9rem;color:var(--ink);
 }
 .today-events li,.event-chip{list-style:none}
 .event-chip{
@@ -276,8 +283,12 @@ footer{
 <main>
 
   <section id="tab-today" class="tab-panel active">
+    <div class="backup-reminder" id="backupReminder" style="display:none">
+      ⚠️ It's been a while since your last backup! Tap "Backup my data" at the bottom of the page to keep everything safe.
+    </div>
     <div class="card affirmation-banner">
       <div class="affirmation" id="affirmation"></div>
+      <div class="greeting" id="greeting"></div>
     </div>
     <div class="today-grid">
       <div class="card tile">
@@ -646,8 +657,17 @@ const affirmations = [
   "Your hard work is turning into real magic! ✨",
   "Today is a great day to move and groove! 💃"
 ];
+function getGreeting(){
+  const hour = new Date().getHours();
+  const name = 'Ocean';
+  if(hour < 12) return `Good morning, ${name}. I hope you're looking forward to today!`;
+  if(hour < 17) return `Good afternoon, ${name}. I hope you're having a great day!`;
+  return `Good evening, ${name}. I hope you had a great day!`;
+}
 function renderToday(){
   document.getElementById('affirmation').textContent = affirmations[new Date().getDate() % affirmations.length];
+  document.getElementById('greeting').textContent = getGreeting();
+  document.getElementById('backupReminder').style.display = shouldShowBackupReminder() ? 'block' : 'none';
   const todayStr = fmtDate(new Date());
   const evs = getEventsForDate(todayStr);
   const list = document.getElementById('todayEventsList');
@@ -834,6 +854,17 @@ function exportData(){
   a.href = URL.createObjectURL(blob);
   a.download = 'ocean-dance-diary-backup-'+fmtDate(new Date())+'.json';
   a.click();
+  localStorage.setItem('oceanDance_lastBackup', String(Date.now()));
+  renderToday();
+}
+
+function shouldShowBackupReminder(){
+  const hasData = diary.length>0 || events.length>0 || achievements.medals.length>0 || achievements.skills.length>0 || achievements.performances.length>0;
+  if(!hasData) return false;
+  const last = localStorage.getItem('oceanDance_lastBackup');
+  if(!last) return true;
+  const daysSince = (Date.now() - Number(last)) / (1000*60*60*24);
+  return daysSince >= 7;
 }
 function notify(message){
   openModal(`<p>${escapeHtml(message)}</p><div style="margin-top:14px"><button class="btn small" onclick="closeModal()">OK</button></div>`);
