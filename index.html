@@ -24,8 +24,8 @@
   --blue:#57b8de;
   --blue-light:#d8f1fa;
   --line:#e8e1f5;
-  --shadow:0 4px 14px rgba(169,143,224,0.20);
-  --radius:18px;
+  --shadow:0 3px 10px rgba(169,143,224,0.16);
+  --radius:14px;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -45,6 +45,38 @@
     --shadow:0 4px 14px rgba(0,0,0,0.45);
   }
 }
+:root[data-theme="dark"]{
+  --bg:#221e33;
+  --card-bg:#2e2a47;
+  --ink:#f1edfb;
+  --ink-soft:#b6add1;
+  --pink:#f485bc;
+  --pink-light:#4a2f45;
+  --purple:#bba3ea;
+  --purple-light:#3b2f55;
+  --gold:#f5ce6c;
+  --gold-light:#453a22;
+  --blue:#72c6e6;
+  --blue-light:#20404a;
+  --line:#443a5e;
+  --shadow:0 4px 14px rgba(0,0,0,0.45);
+}
+:root[data-theme="light"]{
+  --bg:#faf9ff;
+  --card-bg:#ffffff;
+  --ink:#463c63;
+  --ink-soft:#8880a3;
+  --pink:#ec6fae;
+  --pink-light:#fbdcec;
+  --purple:#a98fe0;
+  --purple-light:#ede4fb;
+  --gold:#f0c24e;
+  --gold-light:#fdf2ce;
+  --blue:#57b8de;
+  --blue-light:#d8f1fa;
+  --line:#e8e1f5;
+  --shadow:0 3px 10px rgba(169,143,224,0.16);
+}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
@@ -55,7 +87,7 @@ body{
   padding-bottom:70px;
 }
 button,input,select,textarea{font-family:inherit;color:inherit}
-h1,h2,h3{font-family:'Comic Neue',cursive;margin:0 0 8px}
+h1,h2,h3{font-family:'Quicksand',sans-serif;font-weight:700;margin:0 0 8px}
 .app-header{
   position:sticky;top:0;z-index:20;
   background:linear-gradient(120deg,var(--blue-light) 0%,var(--pink-light) 35%,var(--gold-light) 65%,var(--purple-light) 100%);
@@ -65,7 +97,7 @@ h1,h2,h3{font-family:'Comic Neue',cursive;margin:0 0 8px}
   box-shadow:var(--shadow);
 }
 .today-date{
-  font-family:'Comic Neue',cursive;
+  font-family:'Quicksand',sans-serif;
   font-weight:700;
   font-size:clamp(1.3rem,4.5vw,2.1rem);
   color:var(--ink);
@@ -109,6 +141,14 @@ main{max-width:960px;margin:0 auto;padding:16px}
   padding:16px;
   margin-bottom:16px;
 }
+.affirmation-banner{padding:12px 16px}
+.today-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:14px;
+  align-items:start;
+}
+.today-grid .card{margin-bottom:0}
 .btn{
   background:var(--purple);
   color:#fff;
@@ -144,7 +184,7 @@ main{max-width:960px;margin:0 auto;padding:16px}
 
 /* Today tab */
 .affirmation{
-  font-family:'Comic Neue',cursive;font-weight:700;font-size:1.1rem;
+  font-family:'Quicksand',sans-serif;font-weight:700;font-size:1.1rem;
   text-align:center;color:var(--purple);padding:6px 0 2px;
 }
 .today-events li,.event-chip{list-style:none}
@@ -159,7 +199,7 @@ main{max-width:960px;margin:0 auto;padding:16px}
 /* Calendar */
 .cal-subnav{display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
 .cal-nav{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px}
-.cal-nav-label{font-family:'Comic Neue',cursive;font-weight:700;font-size:1.1rem;min-width:180px;text-align:center}
+.cal-nav-label{font-family:'Quicksand',sans-serif;font-weight:700;font-size:1.1rem;min-width:180px;text-align:center}
 .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 @media (max-width:700px){.week-grid{grid-template-columns:1fr}}
 .day-col{background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:8px;min-height:90px}
@@ -220,7 +260,7 @@ footer{
 
 <header class="app-header">
   <div class="today-date" id="todayDate"></div>
-  <div class="app-title">🩰 Ocean's Dance Diary 🌟</div>
+  <div class="app-title">🩰 Ocean's Dance Diary</div>
 </header>
 
 <nav class="tabs">
@@ -233,22 +273,24 @@ footer{
 <main>
 
   <section id="tab-today" class="tab-panel active">
-    <div class="card">
+    <div class="card affirmation-banner">
       <div class="affirmation" id="affirmation"></div>
     </div>
-    <div class="card">
-      <h2>Today's dance stuff</h2>
-      <ul id="todayEventsList"></ul>
-      <button class="btn secondary small" onclick="openAddEventModal(fmtDate(new Date()))">+ Add something today</button>
-    </div>
-    <div class="card">
-      <h2>Quick diary check-in</h2>
-      <p class="empty-note" id="todayDiaryStatus"></p>
-      <button class="btn small" onclick="goToDiaryForToday()">📖 Write today's entry</button>
-    </div>
-    <div class="card" id="recentAchieveCard">
-      <h2>🏆 Latest achievement</h2>
-      <div id="recentAchieve" class="empty-note">Nothing logged yet — add one in the Achievements tab!</div>
+    <div class="today-grid">
+      <div class="card tile">
+        <h2>Today's Schedule</h2>
+        <ul id="todayEventsList"></ul>
+        <button class="btn secondary small" onclick="openAddEventModal(fmtDate(new Date()))">+ Add something today</button>
+      </div>
+      <div class="card tile">
+        <h2>Diary Check-in</h2>
+        <p class="empty-note" id="todayDiaryStatus"></p>
+        <button class="btn small" onclick="goToDiaryForToday()">📖 Write today's entry</button>
+      </div>
+      <div class="card tile" id="recentAchieveCard">
+        <h2>🏆 Latest Achievement</h2>
+        <div id="recentAchieve" class="empty-note">Nothing logged yet — add one in the Achievements tab!</div>
+      </div>
     </div>
   </section>
 
@@ -553,12 +595,12 @@ function submitEventForm(e){
 }
 
 function deleteEvent(id){
-  if(!confirm('Delete this event? If it repeats weekly, all future occurrences will be removed too.')) return;
-  events = events.filter(e=>e.id!==id);
-  saveEvents();
-  closeModal();
-  renderCalendar();
-  renderToday();
+  confirmAction('Delete this event? If it repeats weekly, all future occurrences will be removed too.', ()=>{
+    events = events.filter(e=>e.id!==id);
+    saveEvents();
+    renderCalendar();
+    renderToday();
+  });
 }
 
 /* ---------- modal ---------- */
@@ -567,6 +609,15 @@ function openModal(html){
   document.getElementById('modalOverlay').classList.remove('hidden');
 }
 function closeModal(){ document.getElementById('modalOverlay').classList.add('hidden'); }
+
+function confirmAction(message, onYes){
+  openModal(`<p>${escapeHtml(message)}</p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn danger small" id="confirmYesBtn">Yes, delete</button>
+      <button class="btn ghost small" onclick="closeModal()">Cancel</button>
+    </div>`);
+  document.getElementById('confirmYesBtn').onclick = ()=>{ closeModal(); onYes(); };
+}
 
 /* ---------- tabs ---------- */
 document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
@@ -647,7 +698,7 @@ async function submitDiaryForm(e){
   e.preventDefault();
   const editId = document.getElementById('diaryEditId').value;
   const dStr = document.getElementById('diaryDate').value;
-  const text = document.getElementById('diaryText').value.trim();
+  const text = capitalizeSentences(document.getElementById('diaryText').value.trim());
   const fileInput = document.getElementById('diaryPhoto');
   let photo = null;
   if(editId){
@@ -691,12 +742,13 @@ function editDiaryEntry(id){
 }
 
 function deleteDiaryEntry(id){
-  if(!confirm('Delete this diary entry?')) return;
-  diary = diary.filter(d=>d.id!==id);
-  saveDiary();
-  renderDiaryList();
-  renderCalendar();
-  renderToday();
+  confirmAction('Delete this diary entry?', ()=>{
+    diary = diary.filter(d=>d.id!==id);
+    saveDiary();
+    renderDiaryList();
+    renderCalendar();
+    renderToday();
+  });
 }
 
 function renderDiaryList(){
@@ -735,7 +787,7 @@ function submitAchieveForm(e, cat){
   achievements[cat].push({
     id:newId(), date:f.date.value, title:f.title.value.trim(),
     placement: f.placement ? f.placement.value.trim() : '',
-    notes: f.notes.value.trim()
+    notes: capitalizeSentences(f.notes.value.trim())
   });
   saveAchievements();
   f.reset();
@@ -743,11 +795,12 @@ function submitAchieveForm(e, cat){
   renderToday();
 }
 function deleteAchieve(cat, id){
-  if(!confirm('Delete this entry?')) return;
-  achievements[cat] = achievements[cat].filter(a=>a.id!==id);
-  saveAchievements();
-  renderAchievements();
-  renderToday();
+  confirmAction('Delete this entry?', ()=>{
+    achievements[cat] = achievements[cat].filter(a=>a.id!==id);
+    saveAchievements();
+    renderAchievements();
+    renderToday();
+  });
 }
 function renderAchieveList(elId, cat, iconFn){
   const el = document.getElementById(elId);
@@ -776,6 +829,9 @@ function exportData(){
   a.download = 'ocean-dance-diary-backup-'+fmtDate(new Date())+'.json';
   a.click();
 }
+function notify(message){
+  openModal(`<p>${escapeHtml(message)}</p><div style="margin-top:14px"><button class="btn small" onclick="closeModal()">OK</button></div>`);
+}
 function importData(e){
   const file = e.target.files[0];
   if(!file) return;
@@ -784,13 +840,14 @@ function importData(e){
     try{
       const data = JSON.parse(ev.target.result);
       if(!data.events || !data.diary || !data.achievements) throw new Error('bad format');
-      if(!confirm('This will replace all current data with the backup file. Continue?')) return;
-      events = data.events; diary = data.diary; achievements = data.achievements;
-      saveEvents(); saveDiary(); saveAchievements();
-      renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
-      alert('Backup restored!');
+      confirmAction('This will replace all current data with the backup file. Continue?', ()=>{
+        events = data.events; diary = data.diary; achievements = data.achievements;
+        saveEvents(); saveDiary(); saveAchievements();
+        renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+        notify('Backup restored!');
+      });
     }catch(err){
-      alert('Sorry, that file could not be read as a backup.');
+      notify('Sorry, that file could not be read as a backup.');
     }
   };
   reader.readAsText(file);
@@ -798,6 +855,9 @@ function importData(e){
 }
 
 /* ---------- utils ---------- */
+function capitalizeSentences(str){
+  return str.replace(/(^\s*[a-z]|[.!?]\s+[a-z])/g, match => match.toUpperCase());
+}
 function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str;
