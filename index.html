@@ -150,6 +150,9 @@ main{max-width:960px;margin:0 auto;padding:16px}
   align-items:start;
 }
 .today-grid .card{margin-bottom:0}
+.today-grid .tile{cursor:pointer;transition:transform .15s ease, box-shadow .15s ease}
+.today-grid .tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(169,143,224,0.24)}
+.today-grid .tile:focus-visible{outline:3px solid var(--purple);outline-offset:2px}
 .btn{
   background:var(--purple);
   color:#fff;
@@ -196,6 +199,7 @@ main{max-width:960px;margin:0 auto;padding:16px}
   padding:10px 14px;margin-bottom:16px;text-align:center;font-size:.9rem;color:var(--ink);
 }
 .today-events li,.event-chip{list-style:none}
+#todayEventsList{list-style:none;margin:0;padding:0}
 .event-chip{
   display:flex;align-items:center;gap:6px;
   background:var(--purple-light);border-radius:10px;padding:6px 9px;margin:4px 0;font-size:.9rem;
@@ -291,19 +295,19 @@ footer{
       <div class="greeting" id="greeting"></div>
     </div>
     <div class="today-grid">
-      <div class="card tile">
+      <div class="card tile" role="button" tabindex="0" onclick="switchTab('calendar')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchTab('calendar');}">
         <h2>Today's Schedule</h2>
         <ul id="todayEventsList"></ul>
-        <button class="btn secondary small" onclick="openAddEventModal(fmtDate(new Date()))">+ Add something today</button>
+        <button class="btn secondary small" onclick="event.stopPropagation();openAddEventModal(fmtDate(new Date()))">+ Add something today</button>
       </div>
-      <div class="card tile">
+      <div class="card tile" role="button" tabindex="0" onclick="switchTab('diary')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchTab('diary');}">
         <h2>Diary Check-in</h2>
         <p class="empty-note" id="todayDiaryStatus"></p>
-        <button class="btn small" onclick="goToDiaryForToday()">📖 Write today's entry</button>
+        <button class="btn small" onclick="event.stopPropagation();goToDiaryForToday()">📖 Write today's entry</button>
       </div>
-      <div class="card tile" id="recentAchieveCard">
+      <div class="card tile" id="recentAchieveCard" role="button" tabindex="0" onclick="switchTab('achievements')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchTab('achievements');}">
         <h2>🏆 Latest Achievement</h2>
-        <div id="recentAchieve" class="empty-note">Nothing logged yet — add one in the Achievements tab!</div>
+        <div id="recentAchieve" class="empty-note">What are you proud of lately, Ocean? I'd love to celebrate it with you!</div>
       </div>
     </div>
   </section>
@@ -429,10 +433,57 @@ let events = JSON.parse(localStorage.getItem('oceanDance_events') || '[]');
 let diary = JSON.parse(localStorage.getItem('oceanDance_diary') || '[]');
 let achievements = JSON.parse(localStorage.getItem('oceanDance_achievements') || '{"medals":[],"skills":[],"performances":[]}');
 
-function saveEvents(){ localStorage.setItem('oceanDance_events', JSON.stringify(events)); }
-function saveDiary(){ localStorage.setItem('oceanDance_diary', JSON.stringify(diary)); }
-function saveAchievements(){ localStorage.setItem('oceanDance_achievements', JSON.stringify(achievements)); }
+function saveEvents(){ localStorage.setItem('oceanDance_events', JSON.stringify(events)); markUpdatedAndSync(); }
+function saveDiary(){ localStorage.setItem('oceanDance_diary', JSON.stringify(diary)); markUpdatedAndSync(); }
+function saveAchievements(){ localStorage.setItem('oceanDance_achievements', JSON.stringify(achievements)); markUpdatedAndSync(); }
 function newId(){ return 'id'+Date.now()+Math.random().toString(16).slice(2); }
+
+/* ---------- cloud sync (Firebase Realtime Database, REST API, no SDK needed) ---------- */
+const FIREBASE_DB_URL = 'https://oceans-dance-diary-default-rtdb.europe-west1.firebasedatabase.app';
+const SYNC_PATH = 'oceanDanceData';
+
+function markUpdatedAndSync(){
+  localStorage.setItem('oceanDance_updatedAt', String(Date.now()));
+  pushToCloud();
+}
+
+async function pushToCloud(){
+  if(!FIREBASE_DB_URL) return;
+  const payload = { events, diary, achievements, updatedAt: Date.now() };
+  try{
+    await fetch(`${FIREBASE_DB_URL}/${SYNC_PATH}.json`, { method:'PUT', body: JSON.stringify(payload) });
+  }catch(err){ /* offline, or blocked (e.g. the claude.ai preview sandbox) - local save already succeeded */ }
+}
+
+async function pullFromCloud(){
+  if(!FIREBASE_DB_URL) return;
+  try{
+    const res = await fetch(`${FIREBASE_DB_URL}/${SYNC_PATH}.json`);
+    const remote = await res.json();
+    if(!remote) return; // nothing saved to the cloud yet - never overwrite local data with nothing
+
+    const localTimestamp = localStorage.getItem('oceanDance_updatedAt');
+    const hasLocalData = diary.length>0 || events.length>0 || achievements.medals.length>0 || achievements.skills.length>0 || achievements.performances.length>0;
+    if(hasLocalData && !localTimestamp){
+      // This device has existing data from before cloud sync was turned on, and has never
+      // been reconciled. Never silently overwrite it - the user should Backup/Restore once
+      // to choose which copy wins, which also stamps a timestamp and clears this guard.
+      return;
+    }
+
+    const localTime = Number(localTimestamp || 0);
+    if(remote.updatedAt && remote.updatedAt > localTime){
+      events = remote.events || [];
+      diary = remote.diary || [];
+      achievements = remote.achievements || {medals:[], skills:[], performances:[]};
+      localStorage.setItem('oceanDance_events', JSON.stringify(events));
+      localStorage.setItem('oceanDance_diary', JSON.stringify(diary));
+      localStorage.setItem('oceanDance_achievements', JSON.stringify(achievements));
+      localStorage.setItem('oceanDance_updatedAt', String(remote.updatedAt));
+      renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+    }
+  }catch(err){ /* offline, or blocked (e.g. the claude.ai preview sandbox) - just use local data */ }
+}
 
 /* ---------- date helpers ---------- */
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -637,14 +688,14 @@ function confirmAction(message, onYes){
 }
 
 /* ---------- tabs ---------- */
+function switchTab(name){
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='calendar') renderCalendar();
+}
 document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn[data-tab]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='calendar') renderCalendar();
-  });
+  btn.addEventListener('click', ()=>switchTab(btn.dataset.tab));
 });
 
 /* ---------- today tab ---------- */
@@ -671,10 +722,10 @@ function renderToday(){
   const todayStr = fmtDate(new Date());
   const evs = getEventsForDate(todayStr);
   const list = document.getElementById('todayEventsList');
-  list.innerHTML = evs.length ? evs.map(e=>`<li class="event-chip ${e.type}">${typeIcon[e.type]} ${escapeHtml(e.title)}<span class="time">${e.time||''}</span></li>`).join('') : '<li class="empty-note">Nothing planned for today yet.</li>';
+  list.innerHTML = evs.length ? evs.map(e=>`<li class="event-chip ${e.type}">${typeIcon[e.type]} ${escapeHtml(e.title)}<span class="time">${e.time||''}</span></li>`).join('') : '<li class="empty-note">What are your plans today, Ocean?</li>';
 
   const dEntry = diary.find(d=>d.date===todayStr);
-  document.getElementById('todayDiaryStatus').textContent = dEntry ? "You've already written today's entry — nice!" : "No entry yet for today.";
+  document.getElementById('todayDiaryStatus').textContent = dEntry ? "You've already written today's entry — nice!" : "How are you feeling today, Ocean? I'd love to hear about it.";
 
   const all = [
     ...achievements.medals.map(a=>({...a, cat:'medal', icon: medalIcon(a.placement)})),
@@ -682,12 +733,12 @@ function renderToday(){
     ...achievements.performances.map(a=>({...a, cat:'performance', icon:'🎭'}))
   ].sort((a,b)=> b.date.localeCompare(a.date));
   const recentBox = document.getElementById('recentAchieve');
-  recentBox.innerHTML = all.length ? `${all[0].icon} <strong>${escapeHtml(all[0].title)}</strong> — ${niceDate(all[0].date)}` : 'Nothing logged yet — add one in the Achievements tab!';
+  recentBox.innerHTML = all.length ? `${all[0].icon} <strong>${escapeHtml(all[0].title)}</strong> — ${niceDate(all[0].date)}` : "What are you proud of lately, Ocean? I'd love to celebrate it with you!";
 }
 
 function goToDiaryForToday(){ goToDiaryForDate(fmtDate(new Date())); }
 function goToDiaryForDate(dStr){
-  document.querySelector('[data-tab="diary"]').click();
+  switchTab('diary');
   document.getElementById('diaryDate').value = dStr;
 }
 
@@ -912,6 +963,7 @@ renderCalendar();
 renderDiaryList();
 renderAchievements();
 renderToday();
+pullFromCloud();
 </script>
 </body>
 </html>
