@@ -288,6 +288,9 @@ footer{
 .count-display.beat-one{color:var(--pink);transform:scale(1.15)}
 #countStyleSelect{padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--ink);
   font-family:inherit;font-size:0.85rem}
+.music-track-name{font-weight:800;text-align:center;margin-bottom:10px;word-break:break-word}
+.music-time-row{display:flex;justify-content:space-between;font-size:.76rem;color:var(--ink-soft);margin:4px 0 14px}
+#musicEmptyState{text-align:center;padding:10px 0}
 .practice-log-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;
   border-bottom:1px solid var(--line)}
 .practice-log-item:last-child{border-bottom:none}
@@ -312,6 +315,7 @@ footer{
   <button class="tab-btn" data-tab="diary">📖 Diary</button>
   <button class="tab-btn" data-tab="achievements">🏆 Achievements</button>
   <button class="tab-btn" data-tab="practice">🎥 Practice</button>
+  <button class="tab-btn" data-tab="music">🎵 Music</button>
 </nav>
 
 <main>
@@ -521,6 +525,60 @@ footer{
     <div class="card">
       <h2>📋 Practice Log</h2>
       <div id="practiceLogList"><p class="empty-note">No practice sessions logged yet — start the camera above to begin one.</p></div>
+    </div>
+  </section>
+
+  <section id="tab-music" class="tab-panel">
+    <div class="card">
+      <h2>🎵 Music Practice</h2>
+      <p class="practice-intro">Upload a track to practice to. Slow it down or speed it up without changing the pitch,
+        loop any section on repeat, and tap along to set a live count overlay. Your track stays only on this device
+        — never uploaded anywhere.</p>
+
+      <input type="file" id="musicFileInput" accept="audio/*" style="display:none">
+      <div id="musicEmptyState">
+        <button class="btn" id="musicChooseBtn">📁 Choose a Track</button>
+      </div>
+
+      <div id="musicPlayerArea" style="display:none">
+        <div class="music-track-name" id="musicTrackName"></div>
+        <audio id="musicAudio" preload="metadata"></audio>
+        <input type="range" id="musicSeekBar" min="0" max="100" value="0" step="0.1" style="width:100%">
+        <div class="music-time-row">
+          <span id="musicCurrentTime">0:00</span>
+          <span id="musicDuration">0:00</span>
+        </div>
+        <div class="practice-controls">
+          <button class="btn" id="musicPlayBtn">▶ Play</button>
+          <button class="btn ghost" id="musicChangeBtn">📁 Change Track</button>
+        </div>
+
+        <div class="bpm-row">
+          <span>Speed</span>
+          <input type="range" id="musicSpeedSlider" min="50" max="150" value="100">
+          <b id="musicSpeedLabel">100%</b>
+        </div>
+
+        <div class="card" style="background:var(--bg);box-shadow:none">
+          <h3 style="margin-top:0">Loop a Section</h3>
+          <div class="practice-controls">
+            <button class="btn secondary small" id="musicLoopStartBtn">Set Start</button>
+            <button class="btn secondary small" id="musicLoopEndBtn">Set End</button>
+            <button class="btn small" id="musicLoopToggleBtn">🔁 Loop Off</button>
+          </div>
+          <div class="pl-date" id="musicLoopLabel">No section set yet</div>
+        </div>
+
+        <div class="card" style="background:var(--bg);box-shadow:none">
+          <h3 style="margin-top:0">Count Overlay</h3>
+          <div class="count-display" id="musicCountDisplay" style="display:none">1</div>
+          <div class="practice-controls">
+            <button class="btn secondary small" id="musicTapBtn">👆 Tap to the Beat</button>
+            <button class="btn ghost small" id="musicTapResetBtn">Reset</button>
+          </div>
+          <div class="pl-date" id="musicTapStatus">Tap along with the music, on every count, at least 4 times to set the tempo.</div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1146,6 +1204,174 @@ function escapeHtml(str){
   d.textContent = str;
   return d.innerHTML;
 }
+
+/* ---------- music practice ---------- */
+let musicDbPromise = null;
+function openMusicDb(){
+  if(musicDbPromise) return musicDbPromise;
+  musicDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open('oceanMusicTrack', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains('track')) db.createObjectStore('track', { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return musicDbPromise;
+}
+async function saveMusicTrack(name, blob){
+  const db = await openMusicDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('track', 'readwrite');
+    tx.objectStore('track').put({ id: 'current', name, blob });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadMusicTrack(){
+  const db = await openMusicDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('track', 'readonly');
+    const req = tx.objectStore('track').get('current');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+const musicAudio = document.getElementById('musicAudio');
+let musicLoopStart = null, musicLoopEnd = null, musicLoopOn = false;
+let musicTapTimes = [];
+let musicBeatSeconds = null; // seconds per beat, once tempo is set
+let musicAnchorAudioTime = null;
+let musicCountRaf = null;
+
+function fmtMusicTime(sec){
+  if(!isFinite(sec)) return '0:00';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function openTrackInPlayer(name, blob){
+  const url = URL.createObjectURL(blob);
+  musicAudio.src = url;
+  document.getElementById('musicTrackName').textContent = name;
+  document.getElementById('musicEmptyState').style.display = 'none';
+  document.getElementById('musicPlayerArea').style.display = '';
+  musicLoopStart = null; musicLoopEnd = null; musicLoopOn = false;
+  document.getElementById('musicLoopLabel').textContent = 'No section set yet';
+  document.getElementById('musicLoopToggleBtn').textContent = '🔁 Loop Off';
+  resetMusicTaps();
+}
+
+document.getElementById('musicChooseBtn').addEventListener('click', () => document.getElementById('musicFileInput').click());
+document.getElementById('musicChangeBtn').addEventListener('click', () => document.getElementById('musicFileInput').click());
+document.getElementById('musicFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  await saveMusicTrack(file.name, file);
+  openTrackInPlayer(file.name, file);
+  e.target.value = '';
+});
+
+musicAudio.addEventListener('loadedmetadata', () => {
+  document.getElementById('musicSeekBar').max = musicAudio.duration;
+  document.getElementById('musicDuration').textContent = fmtMusicTime(musicAudio.duration);
+});
+musicAudio.addEventListener('timeupdate', () => {
+  document.getElementById('musicSeekBar').value = musicAudio.currentTime;
+  document.getElementById('musicCurrentTime').textContent = fmtMusicTime(musicAudio.currentTime);
+  if(musicLoopOn && musicLoopEnd != null && musicAudio.currentTime >= musicLoopEnd){
+    musicAudio.currentTime = musicLoopStart || 0;
+  }
+});
+musicAudio.addEventListener('ended', () => { document.getElementById('musicPlayBtn').textContent = '▶ Play'; });
+musicAudio.addEventListener('play', () => { document.getElementById('musicPlayBtn').textContent = '⏸ Pause'; startMusicCountLoop(); });
+musicAudio.addEventListener('pause', () => { document.getElementById('musicPlayBtn').textContent = '▶ Play'; });
+
+document.getElementById('musicSeekBar').addEventListener('input', (e) => { musicAudio.currentTime = Number(e.target.value); });
+document.getElementById('musicPlayBtn').addEventListener('click', () => {
+  if(musicAudio.paused) musicAudio.play(); else musicAudio.pause();
+});
+
+document.getElementById('musicSpeedSlider').addEventListener('input', (e) => {
+  const pct = Number(e.target.value);
+  musicAudio.playbackRate = pct / 100;
+  musicAudio.preservesPitch = true;
+  musicAudio.mozPreservesPitch = true;
+  musicAudio.webkitPreservesPitch = true;
+  document.getElementById('musicSpeedLabel').textContent = pct + '%';
+});
+
+document.getElementById('musicLoopStartBtn').addEventListener('click', () => {
+  musicLoopStart = musicAudio.currentTime;
+  updateMusicLoopLabel();
+});
+document.getElementById('musicLoopEndBtn').addEventListener('click', () => {
+  musicLoopEnd = musicAudio.currentTime;
+  updateMusicLoopLabel();
+});
+function updateMusicLoopLabel(){
+  const label = document.getElementById('musicLoopLabel');
+  if(musicLoopStart != null && musicLoopEnd != null){
+    label.textContent = `Section: ${fmtMusicTime(musicLoopStart)} – ${fmtMusicTime(musicLoopEnd)}`;
+  } else if(musicLoopStart != null){
+    label.textContent = `Start set at ${fmtMusicTime(musicLoopStart)} — now set an end point`;
+  } else {
+    label.textContent = 'No section set yet';
+  }
+}
+document.getElementById('musicLoopToggleBtn').addEventListener('click', (e) => {
+  if(musicLoopStart == null || musicLoopEnd == null){ notify('Set a start and end point first.'); return; }
+  musicLoopOn = !musicLoopOn;
+  e.target.textContent = musicLoopOn ? '🔁 Loop On' : '🔁 Loop Off';
+});
+
+function resetMusicTaps(){
+  musicTapTimes = [];
+  musicBeatSeconds = null;
+  musicAnchorAudioTime = null;
+  document.getElementById('musicCountDisplay').style.display = 'none';
+  document.getElementById('musicTapStatus').textContent = 'Tap along with the music, on every count, at least 4 times to set the tempo.';
+}
+document.getElementById('musicTapResetBtn').addEventListener('click', resetMusicTaps);
+document.getElementById('musicTapBtn').addEventListener('click', () => {
+  const now = musicAudio.currentTime;
+  musicTapTimes.push(now);
+  if(musicTapTimes.length > 8) musicTapTimes.shift();
+  if(musicTapTimes.length >= 4){
+    const intervals = [];
+    for(let i = 1; i < musicTapTimes.length; i++) intervals.push(musicTapTimes[i] - musicTapTimes[i-1]);
+    const avg = intervals.reduce((a,b)=>a+b, 0) / intervals.length;
+    if(avg > 0.15 && avg < 3){
+      musicBeatSeconds = avg;
+      musicAnchorAudioTime = now;
+      const bpmEstimate = Math.round(60 / avg);
+      document.getElementById('musicTapStatus').textContent = `Tempo set (~${bpmEstimate} BPM). Keep tapping to refine it, or let the count run.`;
+      document.getElementById('musicCountDisplay').style.display = '';
+    }
+  } else {
+    document.getElementById('musicTapStatus').textContent = `${musicTapTimes.length}/4 taps registered — keep tapping on the beat.`;
+  }
+});
+
+function startMusicCountLoop(){
+  if(musicCountRaf) cancelAnimationFrame(musicCountRaf);
+  function step(){
+    if(musicAudio.paused || musicAudio.ended){ musicCountRaf = null; return; }
+    if(musicBeatSeconds != null && musicAnchorAudioTime != null){
+      const beatsElapsed = (musicAudio.currentTime - musicAnchorAudioTime) / musicBeatSeconds;
+      const count = (((Math.floor(beatsElapsed) % 8) + 8) % 8) + 1;
+      const display = document.getElementById('musicCountDisplay');
+      display.textContent = count;
+      display.classList.toggle('beat-one', count === 1);
+    }
+    musicCountRaf = requestAnimationFrame(step);
+  }
+  step();
+}
+
+loadMusicTrack().then(track => { if(track) openTrackInPlayer(track.name, track.blob); }).catch(()=>{});
 
 /* ---------- init ---------- */
 renderCalendar();
