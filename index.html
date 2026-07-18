@@ -268,6 +268,26 @@ footer{
 .modal img.full{max-width:100%;border-radius:12px}
 .close-x{float:right;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--ink-soft)}
 .welcome-box{text-align:center;padding:10px}
+
+.practice-intro{font-size:.85rem;line-height:1.5;color:var(--ink-soft)}
+.practice-stage{position:relative;width:100%;max-width:480px;margin:14px auto;border-radius:var(--radius);
+  overflow:hidden;background:#1a1a24;aspect-ratio:3/4;}
+.practice-stage video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.practice-stage canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1)}
+.practice-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:#cfc9e6;font-size:.9rem;text-align:center;padding:20px}
+.practice-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px}
+.practice-mode-row{display:flex;gap:8px;justify-content:center;margin-bottom:10px}
+.practice-live-stats{display:flex;justify-content:center;gap:18px;text-align:center;margin-bottom:10px}
+.practice-live-stats .stat-val{font-size:1.4rem;font-weight:800;color:var(--purple)}
+.practice-live-stats .stat-lbl{font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+.bpm-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px}
+.bpm-row input[type=range]{flex:1;max-width:220px}
+.practice-log-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;
+  border-bottom:1px solid var(--line)}
+.practice-log-item:last-child{border-bottom:none}
+.practice-log-item .pl-date{font-size:.78rem;color:var(--ink-soft)}
+.practice-log-item .pl-stats{font-size:.82rem;font-weight:600}
 </style>
 </head>
 <body>
@@ -282,6 +302,7 @@ footer{
   <button class="tab-btn" data-tab="calendar">📅 Calendar</button>
   <button class="tab-btn" data-tab="diary">📖 Diary</button>
   <button class="tab-btn" data-tab="achievements">🏆 Achievements</button>
+  <button class="tab-btn" data-tab="practice">🎥 Practice</button>
 </nav>
 
 <main>
@@ -412,6 +433,58 @@ footer{
     </div>
   </section>
 
+  <section id="tab-practice" class="tab-panel">
+    <div class="card">
+      <h2>🎥 Practice Companion</h2>
+      <p class="practice-intro">This watches your body position through your camera and gives you a skeleton overlay
+        and quantitative movement data while you practice — hang time, estimated jump height, leg-split angle, and
+        beat timing. <strong>Nothing is ever recorded or uploaded</strong> — all of it happens on this device, live,
+        and disappears the moment you stop. It's a technique-improving tool, not a judge — it only measures numbers
+        (height, angle, timing), it never scores your artistry or technique. Height and angle are estimates from a
+        single camera, not lab-grade motion capture, so use them to track your own progress over time rather than
+        as an exact measurement.</p>
+
+      <div class="practice-stage" id="practiceStage">
+        <video id="practiceVideo" autoplay playsinline muted></video>
+        <canvas id="practiceCanvas"></canvas>
+        <div class="practice-placeholder" id="practicePlaceholder">Tap "Start Camera" below to begin</div>
+      </div>
+
+      <div class="practice-controls">
+        <button class="btn" id="practiceStartBtn" onclick="startPracticeCamera()">▶ Start Camera</button>
+        <button class="btn danger" id="practiceStopBtn" onclick="stopPracticeCamera()" style="display:none">■ Stop Camera</button>
+      </div>
+
+      <div class="practice-mode-row" id="practiceModeRow" style="display:none">
+        <button class="tab-btn active" data-mode="free" onclick="setPracticeMode('free')">🪞 Free Practice</button>
+        <button class="tab-btn" data-mode="rhythm" onclick="setPracticeMode('rhythm')">🥁 Rhythm Practice</button>
+      </div>
+
+      <div class="bpm-row" id="bpmRow" style="display:none">
+        <span>Slow</span>
+        <input type="range" id="bpmSlider" min="60" max="160" value="100" oninput="updateBpmLabel()">
+        <span>Fast</span>
+        <b id="bpmLabel">100 BPM</b>
+        <button class="btn secondary small" id="metronomeToggleBtn" onclick="toggleMetronome()">▶ Start Beat</button>
+      </div>
+
+      <div class="practice-live-stats" id="practiceLiveStats" style="display:none">
+        <div><div class="stat-val" id="statJumps">0</div><div class="stat-lbl">Jumps</div></div>
+        <div><div class="stat-val" id="statBestJump">0.0s</div><div class="stat-lbl">Best Hang</div></div>
+        <div id="rhythmStatsBlock" style="display:none"><div class="stat-val" id="statOnBeat">0/0</div><div class="stat-lbl">On the Beat</div></div>
+      </div>
+
+      <div class="practice-controls">
+        <button class="btn gold" id="practiceEndBtn" onclick="endPracticeSession()" style="display:none">🏁 End Session &amp; Save</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📋 Practice Log</h2>
+      <div id="practiceLogList"><p class="empty-note">No practice sessions logged yet — start the camera above to begin one.</p></div>
+    </div>
+  </section>
+
 </main>
 
 <footer>
@@ -433,10 +506,47 @@ footer{
 let events = JSON.parse(localStorage.getItem('oceanDance_events') || '[]');
 let diary = JSON.parse(localStorage.getItem('oceanDance_diary') || '[]');
 let achievements = JSON.parse(localStorage.getItem('oceanDance_achievements') || '{"medals":[],"skills":[],"performances":[]}');
+let practice = JSON.parse(localStorage.getItem('oceanDance_practice') || '[]');
 
 function saveEvents(){ localStorage.setItem('oceanDance_events', JSON.stringify(events)); markUpdatedAndSync(); }
 function saveDiary(){ localStorage.setItem('oceanDance_diary', JSON.stringify(diary)); markUpdatedAndSync(); }
 function saveAchievements(){ localStorage.setItem('oceanDance_achievements', JSON.stringify(achievements)); markUpdatedAndSync(); }
+function savePractice(){ localStorage.setItem('oceanDance_practice', JSON.stringify(practice)); markUpdatedAndSync(); }
+
+function commitPracticeSession(session){
+  practice.push(session);
+  savePractice();
+  renderPracticeLog();
+  notify('Session saved to your Practice Log! 🎉');
+}
+
+function renderPracticeLog(){
+  const list = document.getElementById('practiceLogList');
+  if(!practice.length){ list.innerHTML = '<p class="empty-note">No practice sessions logged yet — start the camera above to begin one.</p>'; return; }
+  const sorted = practice.slice().sort((a,b)=> b.at - a.at);
+  list.innerHTML = sorted.map(s=>{
+    const when = new Date(s.at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' +
+      new Date(s.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    const parts = [];
+    if(s.jumps>0){
+      parts.push(`${s.jumps} jump${s.jumps===1?'':'s'}, best ${s.bestJump.toFixed(2)}s`);
+      const details = (s.jumpDetails||[]).filter(j=>j.heightCm!=null);
+      if(details.length){
+        const avgHeight = details.reduce((sum,j)=>sum+j.heightCm,0)/details.length;
+        parts.push(`avg est. height ${avgHeight.toFixed(0)}cm`);
+      }
+      const splits = (s.jumpDetails||[]).filter(j=>j.splitDeg!=null);
+      if(splits.length){
+        const widest = Math.max(...splits.map(j=>j.splitDeg));
+        parts.push(`widest split ${widest.toFixed(0)}°`);
+      }
+    }
+    if(s.mode==='rhythm' && s.totalBeats>0) parts.push(`${s.onBeat}/${s.totalBeats} beats on time`);
+    if(!parts.length) parts.push('Free practice');
+    return `<div class="practice-log-item"><div><div class="pl-stats">${escapeHtml(parts.join(' · '))}</div>
+      <div class="pl-date">${when} · ${s.duration}s</div></div></div>`;
+  }).join('');
+}
 function newId(){ return 'id'+Date.now()+Math.random().toString(16).slice(2); }
 
 /* ---------- cloud sync (Firebase Realtime Database, REST API, no SDK needed) ---------- */
@@ -450,7 +560,7 @@ function markUpdatedAndSync(){
 
 async function pushToCloud(){
   if(!FIREBASE_DB_URL) return;
-  const payload = { events, diary, achievements, updatedAt: Date.now() };
+  const payload = { events, diary, achievements, practice, updatedAt: Date.now() };
   try{
     await fetch(`${FIREBASE_DB_URL}/${SYNC_PATH}.json`, { method:'PUT', body: JSON.stringify(payload) });
   }catch(err){ /* offline, or blocked (e.g. the claude.ai preview sandbox) - local save already succeeded */ }
@@ -477,11 +587,13 @@ async function pullFromCloud(){
       events = remote.events || [];
       diary = remote.diary || [];
       achievements = remote.achievements || {medals:[], skills:[], performances:[]};
+      practice = remote.practice || [];
       localStorage.setItem('oceanDance_events', JSON.stringify(events));
       localStorage.setItem('oceanDance_diary', JSON.stringify(diary));
       localStorage.setItem('oceanDance_achievements', JSON.stringify(achievements));
+      localStorage.setItem('oceanDance_practice', JSON.stringify(practice));
       localStorage.setItem('oceanDance_updatedAt', String(remote.updatedAt));
-      renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+      renderCalendar(); renderDiaryList(); renderAchievements(); renderToday(); renderPracticeLog();
     }
   }catch(err){ /* offline, or blocked (e.g. the claude.ai preview sandbox) - just use local data */ }
 }
@@ -901,7 +1013,7 @@ function renderAchievements(){
 
 /* ---------- backup / restore ---------- */
 function exportData(){
-  const blob = new Blob([JSON.stringify({events,diary,achievements}, null, 2)], {type:'application/json'});
+  const blob = new Blob([JSON.stringify({events,diary,achievements,practice}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'ocean-dance-diary-backup-'+fmtDate(new Date())+'.json';
@@ -930,9 +1042,9 @@ function importData(e){
       const data = JSON.parse(ev.target.result);
       if(!data.events || !data.diary || !data.achievements) throw new Error('bad format');
       confirmAction('This will replace all current data with the backup file. Continue?', ()=>{
-        events = data.events; diary = data.diary; achievements = data.achievements;
-        saveEvents(); saveDiary(); saveAchievements();
-        renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+        events = data.events; diary = data.diary; achievements = data.achievements; practice = data.practice || [];
+        saveEvents(); saveDiary(); saveAchievements(); savePractice();
+        renderCalendar(); renderDiaryList(); renderAchievements(); renderToday(); renderPracticeLog();
         notify('Backup restored!');
       });
     }catch(err){
@@ -948,8 +1060,9 @@ function confirmStartFresh(){
     events = [];
     diary = [];
     achievements = { medals:[], skills:[], performances:[] };
-    saveEvents(); saveDiary(); saveAchievements();
-    renderCalendar(); renderDiaryList(); renderAchievements(); renderToday();
+    practice = [];
+    saveEvents(); saveDiary(); saveAchievements(); savePractice();
+    renderCalendar(); renderDiaryList(); renderAchievements(); renderToday(); renderPracticeLog();
     notify('All data has been erased. Starting fresh!');
   });
 }
@@ -975,7 +1088,287 @@ renderCalendar();
 renderDiaryList();
 renderAchievements();
 renderToday();
+renderPracticeLog();
 pullFromCloud();
+</script>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const video = document.getElementById('practiceVideo');
+const canvas = document.getElementById('practiceCanvas');
+const ctx = canvas.getContext('2d');
+const placeholder = document.getElementById('practicePlaceholder');
+
+let poseLandmarker = null;
+let stream = null;
+let rafId = null;
+let mode = 'free';
+let sessionStart = null;
+
+// jump detection state
+let hipBaseline = null;
+let airborne = false;
+let airborneStart = 0;
+let jumpCount = 0;
+let bestJump = 0;
+let groundedWorldHipY = null;
+let peakWorldHipY = null;
+let peakWorld = null;
+let jumpDetails = []; // {duration, heightCm, splitDeg} per jump this session
+
+// rhythm state
+let metronomeTimer = null;
+let bpm = 100;
+let beatTimestamps = [];
+let onBeatCount = 0;
+let totalBeatCount = 0;
+let prevWristPos = null;
+let prevWristT = null;
+let recentWristSpeeds = []; // {t, speed}
+let audioCtx = null;
+
+function beep(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = 880;
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.13);
+}
+
+async function ensurePoseLandmarker(){
+  if(poseLandmarker) return poseLandmarker;
+  const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numPoses: 1
+  });
+  return poseLandmarker;
+}
+
+window.startPracticeCamera = async function(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+  }catch(err){
+    notify("Couldn't access your camera — check that this site has camera permission.");
+    return;
+  }
+  video.srcObject = stream;
+  await new Promise(resolve => { video.onloadedmetadata = resolve; });
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  placeholder.style.display = 'none';
+
+  document.getElementById('practiceStartBtn').style.display = 'none';
+  document.getElementById('practiceStopBtn').style.display = '';
+  document.getElementById('practiceModeRow').style.display = '';
+  document.getElementById('practiceLiveStats').style.display = '';
+  document.getElementById('practiceEndBtn').style.display = '';
+
+  placeholder.textContent = 'Loading pose model…';
+  placeholder.style.display = '';
+  await ensurePoseLandmarker();
+  placeholder.style.display = 'none';
+
+  sessionStart = Date.now();
+  jumpCount = 0; bestJump = 0; hipBaseline = null; airborne = false;
+  groundedWorldHipY = null; peakWorldHipY = null; peakWorld = null; jumpDetails = [];
+  onBeatCount = 0; totalBeatCount = 0; beatTimestamps = []; recentWristSpeeds = [];
+  updateLiveStats();
+
+  detectLoop();
+};
+
+window.stopPracticeCamera = function(){
+  if(rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  if(metronomeTimer){ clearInterval(metronomeTimer); metronomeTimer = null; }
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  placeholder.textContent = 'Tap "Start Camera" below to begin';
+  placeholder.style.display = '';
+  document.getElementById('practiceStartBtn').style.display = '';
+  document.getElementById('practiceStopBtn').style.display = 'none';
+  document.getElementById('practiceModeRow').style.display = 'none';
+  document.getElementById('bpmRow').style.display = 'none';
+  document.getElementById('practiceLiveStats').style.display = 'none';
+  document.getElementById('practiceEndBtn').style.display = 'none';
+};
+
+window.setPracticeMode = function(m){
+  mode = m;
+  document.querySelectorAll('#practiceModeRow .tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  document.getElementById('bpmRow').style.display = m==='rhythm' ? 'flex' : 'none';
+  document.getElementById('rhythmStatsBlock').style.display = m==='rhythm' ? '' : 'none';
+  if(m!=='rhythm' && metronomeTimer){ clearInterval(metronomeTimer); metronomeTimer=null; document.getElementById('metronomeToggleBtn').textContent='▶ Start Beat'; }
+};
+
+window.updateBpmLabel = function(){
+  bpm = Number(document.getElementById('bpmSlider').value);
+  document.getElementById('bpmLabel').textContent = bpm + ' BPM';
+  if(metronomeTimer){ clearInterval(metronomeTimer); startMetronomeInterval(); }
+};
+
+function startMetronomeInterval(){
+  const intervalMs = 60000 / bpm;
+  metronomeTimer = setInterval(()=>{
+    beep();
+    beatTimestamps.push(performance.now());
+    totalBeatCount++;
+    updateLiveStats();
+  }, intervalMs);
+}
+
+window.toggleMetronome = function(){
+  if(metronomeTimer){
+    clearInterval(metronomeTimer); metronomeTimer = null;
+    document.getElementById('metronomeToggleBtn').textContent = '▶ Start Beat';
+  } else {
+    startMetronomeInterval();
+    document.getElementById('metronomeToggleBtn').textContent = '■ Stop Beat';
+  }
+};
+
+function updateLiveStats(){
+  document.getElementById('statJumps').textContent = jumpCount;
+  document.getElementById('statBestJump').textContent = bestJump.toFixed(2) + 's';
+  document.getElementById('statOnBeat').textContent = onBeatCount + '/' + totalBeatCount;
+}
+
+function angleBetween(a,b,c){
+  // angle at point b, formed by points a-b-c, in degrees
+  const ab = { x:a.x-b.x, y:a.y-b.y };
+  const cb = { x:c.x-b.x, y:c.y-b.y };
+  const dot = ab.x*cb.x + ab.y*cb.y;
+  const magA = Math.hypot(ab.x,ab.y), magC = Math.hypot(cb.x,cb.y);
+  if(magA===0 || magC===0) return 0;
+  const cos = Math.min(1, Math.max(-1, dot/(magA*magC)));
+  return Math.acos(cos) * 180/Math.PI;
+}
+
+function worldHipY(world){
+  const lHip = world[23], rHip = world[24];
+  if(!lHip || !rHip) return null;
+  return (lHip.y + rHip.y) / 2; // MediaPipe world landmarks: Y points up, origin at hip centre, metres
+}
+
+function legSplitAngleDeg(world){
+  const lHip=world[23], rHip=world[24], lAnkle=world[27], rAnkle=world[28];
+  if(!lHip||!rHip||!lAnkle||!rAnkle) return null;
+  const leftLeg = { x:lAnkle.x-lHip.x, y:lAnkle.y-lHip.y, z:lAnkle.z-lHip.z };
+  const rightLeg = { x:rAnkle.x-rHip.x, y:rAnkle.y-rHip.y, z:rAnkle.z-rHip.z };
+  const dot = leftLeg.x*rightLeg.x + leftLeg.y*rightLeg.y + leftLeg.z*rightLeg.z;
+  const magL = Math.hypot(leftLeg.x,leftLeg.y,leftLeg.z), magR = Math.hypot(rightLeg.x,rightLeg.y,rightLeg.z);
+  if(magL===0||magR===0) return null;
+  const cos = Math.min(1, Math.max(-1, dot/(magL*magR)));
+  return Math.acos(cos) * 180/Math.PI;
+}
+
+function processJumpDetection(landmarks, world, now){
+  const lHip = landmarks[23], rHip = landmarks[24];
+  if(!lHip || !rHip) return;
+  const hipY = (lHip.y + rHip.y) / 2; // image-space, used only to detect liftoff/landing timing
+
+  if(hipBaseline===null){ hipBaseline = hipY; return; }
+  if(!airborne) hipBaseline = hipBaseline*0.95 + hipY*0.05;
+
+  const liftThreshold = 0.05; // normalized image-height units
+  if(!airborne && (hipBaseline - hipY) > liftThreshold){
+    airborne = true;
+    airborneStart = now;
+    groundedWorldHipY = worldHipY(world);
+    peakWorldHipY = groundedWorldHipY;
+    peakWorld = world;
+  } else if(airborne){
+    const wy = worldHipY(world);
+    if(wy!==null && groundedWorldHipY!==null && (wy - groundedWorldHipY) > (peakWorldHipY - groundedWorldHipY)){
+      peakWorldHipY = wy;
+      peakWorld = world;
+    }
+    if((hipBaseline - hipY) < liftThreshold*0.4){
+      airborne = false;
+      const durationSec = (now - airborneStart) / 1000;
+      if(durationSec > 0.15 && durationSec < 3){ // ignore noise / dropped tracking
+        jumpCount++;
+        if(durationSec > bestJump) bestJump = durationSec;
+        let heightCm = null, splitDeg = null;
+        if(groundedWorldHipY!==null && peakWorldHipY!==null){
+          heightCm = Math.abs(peakWorldHipY - groundedWorldHipY) * 100;
+        }
+        if(peakWorld) splitDeg = legSplitAngleDeg(peakWorld);
+        jumpDetails.push({ duration: durationSec, heightCm, splitDeg });
+        updateLiveStats();
+      }
+    }
+  }
+}
+
+function processRhythmDetection(landmarks, now){
+  if(mode!=='rhythm' || !metronomeTimer) return;
+  const rWrist = landmarks[16], lWrist = landmarks[15];
+  if(!rWrist || !lWrist) return;
+  const wristPos = { x:(rWrist.x+lWrist.x)/2, y:(rWrist.y+lWrist.y)/2 };
+  if(prevWristPos && prevWristT){
+    const dt = (now - prevWristT) / 1000;
+    if(dt>0){
+      const speed = Math.hypot(wristPos.x-prevWristPos.x, wristPos.y-prevWristPos.y) / dt;
+      recentWristSpeeds.push({ t: now, speed });
+      if(recentWristSpeeds.length > 60) recentWristSpeeds.shift();
+    }
+  }
+  prevWristPos = wristPos; prevWristT = now;
+
+  // score any beats whose ±200ms window has now fully passed
+  while(beatTimestamps.length && now - beatTimestamps[0] > 220){
+    const beatT = beatTimestamps.shift();
+    const hit = recentWristSpeeds.some(s => Math.abs(s.t-beatT)<220 && s.speed>0.35);
+    if(hit) onBeatCount++;
+    updateLiveStats();
+  }
+}
+
+function detectLoop(){
+  if(!poseLandmarker || video.paused || video.ended){ rafId = requestAnimationFrame(detectLoop); return; }
+  const now = performance.now();
+  const results = poseLandmarker.detectForVideo(video, now);
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(results.landmarks && results.landmarks[0]){
+    const landmarks = results.landmarks[0];
+    const world = results.worldLandmarks && results.worldLandmarks[0];
+    const drawingUtils = new DrawingUtils(ctx);
+    drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#f485bc', lineWidth: 3 });
+    drawingUtils.drawLandmarks(landmarks, { color: '#a98fe0', radius: 3 });
+
+    if(world) processJumpDetection(landmarks, world, now);
+    processRhythmDetection(landmarks, now);
+  }
+
+  rafId = requestAnimationFrame(detectLoop);
+}
+
+window.endPracticeSession = function(){
+  const duration = Math.round((Date.now() - sessionStart) / 1000);
+  const session = {
+    at: Date.now(),
+    mode,
+    duration,
+    jumps: jumpCount,
+    bestJump,
+    jumpDetails: jumpDetails.slice(),
+    onBeat: onBeatCount,
+    totalBeats: totalBeatCount
+  };
+  window.stopPracticeCamera();
+  window.commitPracticeSession(session);
+};
 </script>
 </body>
 </html>
