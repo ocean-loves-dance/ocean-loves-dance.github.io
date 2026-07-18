@@ -283,6 +283,11 @@ footer{
 .practice-live-stats .stat-lbl{font-size:.68rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
 .bpm-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px}
 .bpm-row input[type=range]{flex:1;max-width:220px}
+.count-display{font-size:2.6rem;font-weight:900;text-align:center;color:var(--purple);margin-bottom:12px;
+  transition:transform 0.08s ease}
+.count-display.beat-one{color:var(--pink);transform:scale(1.15)}
+#countStyleSelect{padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--bg);color:var(--ink);
+  font-family:inherit;font-size:0.85rem}
 .practice-log-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;
   border-bottom:1px solid var(--line)}
 .practice-log-item:last-child{border-bottom:none}
@@ -469,11 +474,21 @@ footer{
 
       <div class="bpm-row" id="bpmRow" style="display:none">
         <span>Slow</span>
-        <input type="range" id="bpmSlider" min="60" max="160" value="100" oninput="updateBpmLabel()">
+        <input type="range" id="bpmSlider" min="60" max="200" value="100" oninput="updateBpmLabel()">
         <span>Fast</span>
         <b id="bpmLabel">100 BPM</b>
         <button class="btn secondary small" id="metronomeToggleBtn" onclick="toggleMetronome()">▶ Start Beat</button>
       </div>
+      <div class="bpm-row" id="eightCountRow" style="display:none">
+        <span>Count style:</span>
+        <select id="countStyleSelect" onchange="setCountStyle(this.value)">
+          <option value="none">Plain click</option>
+          <option value="8">8-Count (jazz/commercial)</option>
+          <option value="4">4-Count</option>
+          <option value="3">Waltz / Ballet (3-Count)</option>
+        </select>
+      </div>
+      <div class="count-display" id="countDisplay" style="display:none">1</div>
 
       <div class="bpm-row" id="repsRow" style="display:none">
         <span>Target reps:</span>
@@ -1241,13 +1256,22 @@ let prevWristPos = null;
 let prevWristT = null;
 let recentWristSpeeds = []; // {t, speed}
 let audioCtx = null;
+let countStyle = 'none'; // 'none' | '4' | '8' | '3'
+let currentBeatInGroup = 0;
 
-function beep(){
+window.setCountStyle = function(style){
+  countStyle = style;
+  currentBeatInGroup = 0;
+  const display = document.getElementById('countDisplay');
+  display.style.display = style === 'none' ? 'none' : '';
+};
+
+function beep(accent){
   if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.frequency.value = 880;
-  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  osc.frequency.value = accent ? 1320 : 880;
+  gain.gain.setValueAtTime(accent ? 0.22 : 0.15, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
   osc.connect(gain); gain.connect(audioCtx.destination);
   osc.start(); osc.stop(audioCtx.currentTime + 0.13);
@@ -1332,6 +1356,12 @@ function sizePracticeStage(){
   }
 }
 window.addEventListener('resize', () => { if(stream) sizePracticeStage(); });
+// Android Chrome's address bar showing/hiding often doesn't fire a reliable window resize event,
+// so also listen on visualViewport (the API meant for exactly this) and re-check shortly after
+// camera start in case the browser chrome was still animating when we first measured.
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', () => { if(stream) sizePracticeStage(); });
+}
 
 window.startPracticeCamera = async function(){
   try{
@@ -1360,6 +1390,9 @@ window.startPracticeCamera = async function(){
   updateLiveStats();
   updateRefNote();
   sizePracticeStage();
+  // Android's browser chrome can still be settling right after camera permission is granted,
+  // so re-measure a moment later to catch any late viewport change.
+  setTimeout(() => { if(stream) sizePracticeStage(); }, 350);
 
   // start recording immediately so nothing is missed while the pose model loads
   startRecording();
@@ -1397,10 +1430,16 @@ window.setPracticeMode = function(m){
   mode = m;
   document.querySelectorAll('#practiceModeRow .tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
   document.getElementById('bpmRow').style.display = m==='rhythm' ? 'flex' : 'none';
+  document.getElementById('eightCountRow').style.display = m==='rhythm' ? 'flex' : 'none';
   document.getElementById('rhythmStatsBlock').style.display = m==='rhythm' ? '' : 'none';
   document.getElementById('repsRow').style.display = m==='reps' ? 'flex' : 'none';
   document.getElementById('repsStatsBlock').style.display = m==='reps' ? '' : 'none';
-  if(m!=='rhythm' && metronomeTimer){ clearInterval(metronomeTimer); metronomeTimer=null; document.getElementById('metronomeToggleBtn').textContent='▶ Start Beat'; }
+  if(m!=='rhythm'){
+    document.getElementById('countDisplay').style.display = 'none';
+    if(metronomeTimer){ clearInterval(metronomeTimer); metronomeTimer=null; document.getElementById('metronomeToggleBtn').textContent='▶ Start Beat'; }
+  } else {
+    document.getElementById('countDisplay').style.display = countStyle === 'none' ? 'none' : '';
+  }
   updateRefNote();
   if(stream) sizePracticeStage();
 };
@@ -1433,8 +1472,18 @@ function updateRefNote(){
 
 function startMetronomeInterval(){
   const intervalMs = 60000 / bpm;
+  currentBeatInGroup = 0;
   metronomeTimer = setInterval(()=>{
-    beep();
+    const groupSize = countStyle === '3' ? 3 : countStyle === '4' ? 4 : countStyle === '8' ? 8 : 0;
+    let isAccent = false;
+    if(groupSize){
+      currentBeatInGroup = (currentBeatInGroup % groupSize) + 1;
+      isAccent = currentBeatInGroup === 1;
+      const display = document.getElementById('countDisplay');
+      display.textContent = currentBeatInGroup;
+      display.classList.toggle('beat-one', isAccent);
+    }
+    beep(isAccent);
     beatTimestamps.push(performance.now());
     totalBeatCount++;
     updateLiveStats();
