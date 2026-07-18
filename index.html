@@ -85,7 +85,6 @@ body{
   background:var(--bg);
   color:var(--ink);
   min-height:100vh;
-  padding-bottom:92px;
 }
 button,input,select,textarea{font-family:inherit;color:inherit}
 h1,h2,h3{font-family:'Quicksand',sans-serif;font-weight:700;margin:0 0 8px}
@@ -249,9 +248,8 @@ main{max-width:960px;margin:0 auto;padding:16px;padding-bottom:100px}
 .achieve-icon{font-size:1.4rem}
 
 footer{
-  position:fixed;bottom:0;left:0;right:0;
   background:var(--card-bg);border-top:2px solid var(--line);
-  display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;z-index:15;
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;margin-top:8px;
 }
 .footer-buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .copyright-note{font-size:.7rem;color:var(--ink-soft);margin:0}
@@ -1553,10 +1551,9 @@ function stopRecordingAndBuildReview(){
 
 function sizePracticeStage(){
   const stage = document.getElementById('practiceStage');
-  const footer = document.querySelector('body > footer');
   const card = stage && stage.closest('.card');
   if(!stage || !card) return;
-  const footerTop = footer ? footer.getBoundingClientRect().top : window.innerHeight;
+  const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   const stageTop = stage.getBoundingClientRect().top;
 
   // Measure the real height of everything else in this card (controls, mode row, stats, ref note, end button)
@@ -1566,20 +1563,12 @@ function sizePracticeStage(){
   const belowHeight = card.scrollHeight - 10;
   stage.style.height = prevHeight; stage.style.aspectRatio = prevAspect;
 
-  const available = footerTop - stageTop - belowHeight - 24;
+  // Fill the rest of the visible viewport below the stage's own top. The footer is no longer
+  // fixed, so there's nothing left to dodge - if a small phone genuinely can't fit everything,
+  // the page just scrolls, rather than the camera view being squeezed down to stay clear of it.
+  const available = viewportHeight - stageTop - belowHeight - 24;
   stage.style.height = Math.max(320, available) + 'px';
   stage.style.aspectRatio = 'auto';
-
-  // Verification pass: if the last control still ends up overlapping the fixed footer
-  // (e.g. from a reflow this measurement didn't fully capture), shrink further to clear it.
-  const endBtn = document.getElementById('practiceEndBtn');
-  if(endBtn && endBtn.style.display !== 'none'){
-    const overlap = endBtn.getBoundingClientRect().bottom - footerTop;
-    if(overlap > 0){
-      const currentH = parseFloat(stage.style.height);
-      stage.style.height = Math.max(280, currentH - overlap - 16) + 'px';
-    }
-  }
 }
 window.addEventListener('resize', () => { if(stream) sizePracticeStage(); });
 // Android Chrome's address bar showing/hiding often doesn't fire a reliable window resize event,
